@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BV Parfume — Изысканная парфюмерия</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        silver: '#C0C0C0',
+                        'silver-light': '#E8E8E8',
+                        'silver-dark': '#A0A0A0',
+                        charcoal: '#1A1A1A',
+                        'charcoal-light': '#2D2D2D',
+                    },
+                    fontFamily: {
+                        serif: ['Cormorant Garamond', 'serif'],
+                        sans: ['Montserrat', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .btn-silver { background: linear-gradient(135deg, #C0C0C0 0%, #E8E8E8 50%, #C0C0C0 100%); color: #1A1A1A; }
+        .btn-silver:hover { background: linear-gradient(135deg, #A0A0A0 0%, #C0C0C0 50%, #A0A0A0 100%); }
+        .perfume-card:hover { transform: translateY(-5px); box-shadow: 0 25px 50px -12px rgba(192, 192, 192, 0.25); }
+    </style>
+</head>
+<body class="bg-charcoal font-sans text-silver-light">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const API_URL = '/api/v1';
+        
+        const api = {
+            async request(endpoint, options = {}) {
+                const token = localStorage.getItem('token');
+                const config = {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token && { 'Authorization': `Bearer ${token}` }),
+                    },
+                    ...options,
+                };
+                const res = await fetch(`${API_URL}${endpoint}`, config);
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => ({ detail: 'Ошибка сервера' }));
+                    let message = 'Ошибка';
+                    if (Array.isArray(payload.detail)) message = payload.detail.map(d => d.msg || d).join('; ');
+                    else if (typeof payload.detail === 'string') message = payload.detail;
+                    throw new Error(message);
+                }
+                if (res.status === 204) return null;
+                return res.json();
+            },
+            get: (url) => api.request(url),
+            post: (url, data) => api.request(url, { method: 'POST', body: JSON.stringify(data) }),
+            put: (url, data) => api.request(url, { method: 'PUT', body: JSON.stringify(data) }),
+            delete: (url) => api.request(url, { method: 'DELETE' }),
+            // Загрузка файлов
+            async upload(url, file) {
+                const token = localStorage.getItem('token');
+                const formData = new FormData();
+                formData.append('file', file);
+                const res = await fetch(`${API_URL}${url}`, {
+                    method: 'POST',
+                    headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
+                    body: formData,
+                });
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => ({ detail: 'Ошибка загрузки' }));
+                    throw new Error(payload.detail || 'Ошибка загрузки');
+                }
+                return res.json();
+            },
+        };
+
+        const formatPrice = (price) => new Intl.NumberFormat('uz-UZ').format(price) + ' UZS';
+
+        // Префиксы и цвета ролей
+        const roleConfig = {
+            admin: { prefix: '[ADMIN]', color: 'text-red-400', bg: 'bg-red-500/20' },
+            support: { prefix: '[SUPPORT]', color: 'text-blue-400', bg: 'bg-blue-500/20' },
+            seller: { prefix: '[SELLER]', color: 'text-green-400', bg: 'bg-green-500/20' },
+            user: { prefix: '[USER]', color: 'text-gray-400', bg: 'bg-gray-500/20' },
+        };
+
+        const RoleBadge = ({ role }) => {
+            const config = roleConfig[role] || roleConfig.user;
+            return (
+                <span className={`${config.bg} ${config.color} px-2 py-0.5 rounded text-xs font-medium`}>
+                    {config.prefix}
+                </span>
+            );
+        };
+
+        // Header
+        function Header({ user, cartCount, onNavigate, onLogout }) {
+            return (
+                <header className="bg-charcoal-light border-b border-silver/20 sticky top-0 z-50">
+                    <div className="max-w-7xl mx-auto px-4 py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-6">
+                                <img src="/static/logo.png" alt="BV Parfume" className="h-12 cursor-pointer" onClick={() => onNavigate('catalog')} />
+                                <nav className="hidden md:flex gap-4">
+                                    <button onClick={() => onNavigate('catalog')} className="text-silver-light hover:text-white transition">Каталог</button>
+                                    {user && <button onClick={() => onNavigate('support')} className="text-silver-light hover:text-white transition">Поддержка</button>}
+                                    {user && <button onClick={() => onNavigate('orders')} className="text-silver-light hover:text-white transition">Заказы</button>}
+                                    {user && ['admin', 'seller', 'support'].includes(user.role) && (
+                                        <button onClick={() => onNavigate('admin')} className="text-silver hover:text-white transition font-medium">Панель</button>
+                                    )}
+                                </nav>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                {user ? (
+                                    <>
+                                        <button onClick={() => onNavigate('cart')} className="relative p-2 hover:bg-charcoal rounded-lg transition">
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                            </svg>
+                                            {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-silver text-charcoal text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">{cartCount}</span>}
+                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <RoleBadge role={user.role} />
+                                            <span className="text-sm text-silver-dark hidden sm:block">{user.username}</span>
+                                            <button onClick={onLogout} className="text-silver-dark hover:text-white text-sm">Выход</button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <button onClick={() => onNavigate('login')} className="btn-silver px-6 py-2 rounded-lg font-medium">Войти</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            );
+        }
+
+        // Auth
+        function AuthPage({ onLogin }) {
+            const [isLogin, setIsLogin] = useState(true);
+            const [form, setForm] = useState({ login: '', email: '', password: '', username: '', first_name: '' });
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(''); setLoading(true);
+                try {
+                    if (isLogin) {
+                        const data = await api.post('/auth/login', { login: form.login, password: form.password });
+                        localStorage.setItem('token', data.access_token);
+                        onLogin(data.user);
+                    } else {
+                        await api.post('/auth/register', { email: form.email, username: form.username, password: form.password, first_name: form.first_name });
+                        setIsLogin(true);
+                        setForm({...form, login: form.email});
+                        setError('Регистрация успешна! Войдите.');
+                    }
+                } catch (err) { setError(err.message); }
+                finally { setLoading(false); }
+            };
+
+            return (
+                <div className="min-h-[80vh] flex items-center justify-center px-4">
+                    <div className="bg-charcoal-light p-8 rounded-2xl w-full max-w-md border border-silver/20">
+                        <div className="text-center mb-8">
+                            <img src="/static/logo.png" alt="BV Parfume" className="h-16 mx-auto mb-4" />
+                            <h2 className="text-2xl font-serif text-white">{isLogin ? 'Вход' : 'Регистрация'}</h2>
+                        </div>
+                        {error && <div className={`p-3 rounded-lg mb-4 text-sm ${error.includes('успешна') ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{error}</div>}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {isLogin ? (
+                                <input type="text" placeholder="Email или логин" value={form.login} onChange={(e) => setForm({...form, login: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark focus:border-silver focus:outline-none" required />
+                            ) : (
+                                <>
+                                    <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark focus:border-silver focus:outline-none" required />
+                                    <input type="text" placeholder="Логин" value={form.username} onChange={(e) => setForm({...form, username: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark focus:border-silver focus:outline-none" required />
+                                    <input type="text" placeholder="Имя (необязательно)" value={form.first_name} onChange={(e) => setForm({...form, first_name: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark focus:border-silver focus:outline-none" />
+                                </>
+                            )}
+                            <div>
+                                <input type="password" placeholder="Пароль" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark focus:border-silver focus:outline-none" required />
+                                {!isLogin && <p className="text-silver-dark text-xs mt-2">Мин. 8 символов, заглавная, строчная, цифра</p>}
+                            </div>
+                            <button type="submit" disabled={loading} className="w-full btn-silver py-3 rounded-lg font-medium disabled:opacity-50">{loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}</button>
+                        </form>
+                        <p className="text-center mt-6 text-silver-dark">
+                            {isLogin ? 'Нет аккаунта?' : 'Есть аккаунт?'}
+                            <button onClick={() => setIsLogin(!isLogin)} className="text-silver hover:text-white ml-2">{isLogin ? 'Регистрация' : 'Войти'}</button>
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // Catalog
+        function CatalogPage({ user, onAddToCart }) {
+            const [items, setItems] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [filter, setFilter] = useState({ category_id: '', search: '' });
+
+            useEffect(() => { api.get('/categories').then(setCategories).catch(console.error); }, []);
+            useEffect(() => {
+                setLoading(true);
+                let url = '/items?page_size=50';
+                if (filter.category_id) url += `&category_id=${filter.category_id}`;
+                if (filter.search) url += `&search=${encodeURIComponent(filter.search)}`;
+                api.get(url).then(data => setItems(data.items)).catch(console.error).finally(() => setLoading(false));
+            }, [filter]);
+
+            return (
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    <div className="text-center mb-12">
+                        <h1 className="text-4xl font-serif text-white mb-4">Коллекция ароматов</h1>
+                    </div>
+                    <div className="bg-charcoal-light rounded-xl p-6 mb-8 border border-silver/10 flex flex-wrap gap-4">
+                        <input type="text" placeholder="Поиск..." value={filter.search} onChange={(e) => setFilter({...filter, search: e.target.value})} className="flex-1 min-w-[200px] bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white placeholder-silver-dark focus:border-silver focus:outline-none" />
+                        <select value={filter.category_id} onChange={(e) => setFilter({...filter, category_id: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white">
+                            <option value="">Все категории</option>
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+                    {loading ? (
+                        <div className="text-center py-20"><div className="inline-block w-8 h-8 border-2 border-silver border-t-transparent rounded-full animate-spin"></div></div>
+                    ) : items.length === 0 ? (
+                        <div className="text-center py-20 text-silver-dark">Товары не найдены</div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {items.map(item => (
+                                <div key={item.id} className="bg-charcoal-light rounded-xl overflow-hidden border border-silver/10 perfume-card transition-all duration-300">
+                                    <div className="aspect-square bg-charcoal flex items-center justify-center p-4">
+                                        {item.image_url ? <img src={item.image_url} alt={item.name} className="max-h-full max-w-full object-contain" /> : <div className="text-6xl text-silver/30">🧴</div>}
+                                    </div>
+                                    <div className="p-4">
+                                        <div className="text-silver-dark text-sm mb-1">{item.brand}</div>
+                                        <h3 className="text-white font-medium mb-2 line-clamp-2">{item.name}</h3>
+                                        {item.volume_ml && <div className="text-silver-dark text-sm mb-2">{item.volume_ml} мл</div>}
+                                        <div className="flex items-center justify-between mt-4">
+                                            <span className="text-silver font-semibold">{formatPrice(item.price)}</span>
+                                            <button onClick={() => onAddToCart(item.id)} disabled={!user || item.stock_quantity === 0} className="btn-silver px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                                                {item.stock_quantity === 0 ? 'Нет' : 'В корзину'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Cart
+        function CartPage({ cart, onUpdateCart, onRemoveFromCart, onNavigate, onClearCart }) {
+            const [address, setAddress] = useState('');
+            const [notes, setNotes] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [success, setSuccess] = useState('');
+
+            const total = cart.reduce((sum, item) => sum + item.item.price * item.quantity, 0);
+
+            const handleOrder = async () => {
+                if (!address || address.length < 5) { setError('Введите адрес (мин. 5 символов)'); return; }
+                setLoading(true); setError('');
+                try {
+                    await api.post('/orders', { shipping_address: address, notes });
+                    setSuccess('Заказ оформлен! Оплата при получении.');
+                    onClearCart();
+                    setTimeout(() => onNavigate('orders'), 2000);
+                } catch (err) { setError(err.message); }
+                finally { setLoading(false); }
+            };
+
+            if (cart.length === 0 && !success) {
+                return (
+                    <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+                        <div className="text-6xl mb-4">🛒</div>
+                        <h2 className="text-2xl text-white mb-4">Корзина пуста</h2>
+                        <button onClick={() => onNavigate('catalog')} className="btn-silver px-6 py-3 rounded-lg">В каталог</button>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto px-4 py-8">
+                    <h1 className="text-3xl font-serif text-white mb-8">Корзина</h1>
+                    {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg mb-6">{error}</div>}
+                    {success && <div className="bg-green-500/20 text-green-300 p-4 rounded-lg mb-6">{success}</div>}
+                    {!success && (
+                        <>
+                            <div className="space-y-4 mb-8">
+                                {cart.map(item => (
+                                    <div key={item.id} className="bg-charcoal-light rounded-xl p-4 flex items-center gap-4 border border-silver/10">
+                                        <div className="w-16 h-16 bg-charcoal rounded-lg flex items-center justify-center">
+                                            {item.item.image_url ? <img src={item.item.image_url} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-2xl">🧴</span>}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-white font-medium truncate">{item.item.name}</h3>
+                                            <p className="text-silver">{formatPrice(item.item.price)}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => onUpdateCart(item.id, Math.max(1, item.quantity - 1))} className="w-8 h-8 rounded bg-charcoal text-silver hover:text-white">−</button>
+                                            <span className="w-8 text-center text-white">{item.quantity}</span>
+                                            <button onClick={() => onUpdateCart(item.id, item.quantity + 1)} className="w-8 h-8 rounded bg-charcoal text-silver hover:text-white">+</button>
+                                        </div>
+                                        <button onClick={() => onRemoveFromCart(item.id)} className="text-red-400 hover:text-red-300 p-2">🗑️</button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="bg-charcoal-light rounded-xl p-6 border border-silver/10">
+                                <div className="flex justify-between items-center mb-6">
+                                    <span className="text-xl text-white">Итого:</span>
+                                    <span className="text-2xl font-bold text-silver">{formatPrice(total)}</span>
+                                </div>
+                                <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Адрес доставки" className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark mb-4" />
+                                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Комментарий" rows="2" className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-3 text-white placeholder-silver-dark mb-4 resize-none" />
+                                <div className="bg-charcoal rounded-lg p-4 mb-4 border border-silver/20 text-silver">💳 Оплата при получении</div>
+                                <button onClick={handleOrder} disabled={loading} className="w-full btn-silver py-4 rounded-lg font-semibold disabled:opacity-50">{loading ? 'Оформление...' : 'Оформить заказ'}</button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        // Orders
+        function OrdersPage() {
+            const [orders, setOrders] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => { api.get('/orders').then(setOrders).catch(console.error).finally(() => setLoading(false)); }, []);
+
+            const statusNames = { pending: 'Ожидает', paid: 'Оплачен', shipped: 'Отправлен', delivered: 'Доставлен', cancelled: 'Отменён' };
+            const statusColors = { pending: 'bg-yellow-500/20 text-yellow-300', paid: 'bg-blue-500/20 text-blue-300', shipped: 'bg-purple-500/20 text-purple-300', delivered: 'bg-green-500/20 text-green-300', cancelled: 'bg-red-500/20 text-red-300' };
+
+            if (loading) return <div className="text-center py-20"><div className="inline-block w-8 h-8 border-2 border-silver border-t-transparent rounded-full animate-spin"></div></div>;
+
+            return (
+                <div className="max-w-4xl mx-auto px-4 py-8">
+                    <h1 className="text-3xl font-serif text-white mb-8">Мои заказы</h1>
+                    {orders.length === 0 ? (
+                        <div className="text-center py-20 text-silver-dark">📦 Нет заказов</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {orders.map(order => (
+                                <div key={order.id} className="bg-charcoal-light rounded-xl p-6 border border-silver/10">
+                                    <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                                        <span className="text-white font-medium">{order.order_number}</span>
+                                        <span className={`px-3 py-1 rounded-full text-sm ${statusColors[order.status]}`}>{statusNames[order.status]}</span>
+                                    </div>
+                                    <div className="flex justify-between text-silver-dark text-sm">
+                                        <span>{order.shipping_address}</span>
+                                        <span className="text-silver font-semibold">{formatPrice(order.total_price)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Support Page
+        function SupportPage({ user }) {
+            const [tickets, setTickets] = useState([]);
+            const [selectedTicket, setSelectedTicket] = useState(null);
+            const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
+            const [newMessage, setNewMessage] = useState('');
+            const [showForm, setShowForm] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [showScrollBtn, setShowScrollBtn] = useState(false);
+            
+            const messagesContainerRef = React.useRef(null);
+            const messagesEndRef = React.useRef(null);
+
+            const isStaff = ['admin', 'support'].includes(user.role);
+
+            // Плавный скролл к последнему сообщению
+            const scrollToBottom = (smooth = true) => {
+                messagesEndRef.current?.scrollIntoView({ 
+                    behavior: smooth ? 'smooth' : 'auto',
+                    block: 'end'
+                });
+            };
+
+            // Проверка позиции скролла
+            const handleScroll = () => {
+                if (!messagesContainerRef.current) return;
+                const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+                const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+                setShowScrollBtn(!isNearBottom);
+            };
+
+            const loadTickets = async () => {
+                try {
+                    const data = await api.get('/support/tickets');
+                    setTickets(data);
+                } catch (err) { console.error(err); }
+                finally { setLoading(false); }
+            };
+
+            const loadTicket = async (id, shouldScroll = true) => {
+                try {
+                    const data = await api.get(`/support/tickets/${id}`);
+                    setSelectedTicket(data);
+                    // Скролл к последнему сообщению после загрузки
+                    if (shouldScroll) {
+                        setTimeout(() => scrollToBottom(false), 50);
+                    }
+                } catch (err) { console.error(err); }
+            };
+
+            useEffect(() => { loadTickets(); }, []);
+
+            const handleCreateTicket = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.post('/support/tickets', newTicket);
+                    setNewTicket({ subject: '', message: '' });
+                    setShowForm(false);
+                    loadTickets();
+                } catch (err) { alert(err.message); }
+            };
+
+            const handleSendMessage = async (e) => {
+                e.preventDefault();
+                if (!newMessage.trim()) return;
+                try {
+                    await api.post(`/support/tickets/${selectedTicket.id}/messages`, { content: newMessage });
+                    setNewMessage('');
+                    await loadTicket(selectedTicket.id, false);
+                    // Скролл к новому сообщению
+                    setTimeout(() => scrollToBottom(true), 50);
+                } catch (err) { alert(err.message); }
+            };
+
+            const handleStatusChange = async (ticketId, status) => {
+                try {
+                    await api.put(`/support/tickets/${ticketId}/status`, { status });
+                    loadTickets();
+                    if (selectedTicket?.id === ticketId) loadTicket(ticketId, false);
+                } catch (err) { alert(err.message); }
+            };
+
+            const statusColors = { open: 'bg-yellow-500/20 text-yellow-300', in_progress: 'bg-blue-500/20 text-blue-300', resolved: 'bg-green-500/20 text-green-300', closed: 'bg-gray-500/20 text-gray-300' };
+            const statusNames = { open: 'Открыт', in_progress: 'В работе', resolved: 'Решён', closed: 'Закрыт' };
+
+            if (loading) return <div className="text-center py-20"><div className="inline-block w-8 h-8 border-2 border-silver border-t-transparent rounded-full animate-spin"></div></div>;
+
+            return (
+                <div className="max-w-6xl mx-auto px-4 py-8">
+                    <div className="flex justify-between items-center mb-8">
+                        <h1 className="text-3xl font-serif text-white">Поддержка</h1>
+                        {!isStaff && <button onClick={() => setShowForm(true)} className="btn-silver px-4 py-2 rounded-lg">+ Новый тикет</button>}
+                    </div>
+
+                    {showForm && (
+                        <div className="bg-charcoal-light rounded-xl p-6 mb-6 border border-silver/10">
+                            <h3 className="text-lg text-white mb-4">Новое обращение</h3>
+                            <form onSubmit={handleCreateTicket} className="space-y-4">
+                                <input type="text" placeholder="Тема" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                <textarea placeholder="Сообщение" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})} rows="4" className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white resize-none" required />
+                                <div className="flex gap-4">
+                                    <button type="submit" className="btn-silver px-6 py-2 rounded-lg">Отправить</button>
+                                    <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2 rounded-lg border border-silver/30 text-silver">Отмена</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-1 space-y-3">
+                            <h3 className="text-silver-dark text-sm font-medium mb-2">Тикеты ({tickets.length})</h3>
+                            {tickets.map(ticket => (
+                                <div key={ticket.id} onClick={() => loadTicket(ticket.id)} className={`bg-charcoal-light rounded-lg p-4 cursor-pointer border transition ${selectedTicket?.id === ticket.id ? 'border-silver' : 'border-silver/10 hover:border-silver/30'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-white font-medium text-sm truncate flex-1">{ticket.subject}</span>
+                                        <span className={`px-2 py-0.5 rounded text-xs ml-2 ${statusColors[ticket.status]}`}>{statusNames[ticket.status]}</span>
+                                    </div>
+                                    <div className="text-silver-dark text-xs">
+                                        {isStaff && <span>От: {ticket.user_name} • </span>}
+                                        {new Date(new Date(ticket.created_at).getTime() + 5 * 60 * 60 * 1000).toLocaleDateString('ru-RU')}
+                                    </div>
+                                </div>
+                            ))}
+                            {tickets.length === 0 && <div className="text-silver-dark text-center py-8">Нет тикетов</div>}
+                        </div>
+
+                        <div className="lg:col-span-2">
+                            {selectedTicket ? (
+                                <div className="bg-charcoal-light rounded-xl border border-silver/10 h-[600px] flex flex-col relative">
+                                    <div className="p-4 border-b border-silver/10">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-white font-medium">{selectedTicket.subject}</h3>
+                                                <div className="text-silver-dark text-sm mt-1">
+                                                    От: <RoleBadge role={roleConfig[tickets.find(t => t.id === selectedTicket.id)?.user_name?.role] ? tickets.find(t => t.id === selectedTicket.id)?.user_name?.role : 'user'} /> {selectedTicket.user_name}
+                                                </div>
+                                            </div>
+                                            {isStaff && (
+                                                <select value={selectedTicket.status} onChange={(e) => handleStatusChange(selectedTicket.id, e.target.value)} className="bg-charcoal border border-silver/30 rounded px-2 py-1 text-white text-sm">
+                                                    <option value="open">Открыт</option>
+                                                    <option value="in_progress">В работе</option>
+                                                    <option value="resolved">Решён</option>
+                                                    <option value="closed">Закрыт</option>
+                                                </select>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Контейнер сообщений */}
+                                    <div 
+                                        ref={messagesContainerRef}
+                                        onScroll={handleScroll}
+                                        className="flex-1 overflow-y-auto p-4 space-y-4 relative scroll-smooth"
+                                    >
+                                        {selectedTicket.messages?.map(msg => (
+                                            <div key={msg.id} className={`flex ${msg.is_staff ? 'justify-start' : 'justify-end'}`}>
+                                                <div className={`inline-block rounded-lg p-3 ${msg.is_staff ? 'bg-blue-500/20' : 'bg-charcoal'}`} style={{ maxWidth: 'min(80%, 500px)', wordBreak: 'break-word' }}>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <RoleBadge role={msg.user_role || 'user'} />
+                                                        <span className="text-silver-dark text-xs">{msg.user_name}</span>
+                                                    </div>
+                                                    <p className="text-white text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                    <span className="text-silver-dark text-xs block mt-1">{new Date(new Date(msg.created_at).getTime() + 5 * 60 * 60 * 1000).toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div ref={messagesEndRef} />
+                                    </div>
+
+                                    {/* Кнопка скролла вниз */}
+                                    {showScrollBtn && (
+                                        <button 
+                                            onClick={() => scrollToBottom(true)}
+                                            className="absolute bottom-24 right-8 w-10 h-10 bg-silver/20 hover:bg-silver/40 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg backdrop-blur-sm border border-silver/30"
+                                            style={{ zIndex: 10 }}
+                                        >
+                                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                            </svg>
+                                        </button>
+                                    )}
+
+                                    {selectedTicket.status !== 'closed' && (
+                                        <form onSubmit={handleSendMessage} className="p-4 border-t border-silver/10 flex gap-2">
+                                            <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Сообщение..." className="flex-1 bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" />
+                                            <button type="submit" className="btn-silver px-6 py-2 rounded-lg">Отправить</button>
+                                        </form>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-charcoal-light rounded-xl border border-silver/10 h-[600px] flex items-center justify-center text-silver-dark">
+                                    Выберите тикет
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Admin Panel
+        function AdminPage({ user }) {
+            const [tab, setTab] = useState('items');
+            const [items, setItems] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [showItemForm, setShowItemForm] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [showUserForm, setShowUserForm] = useState(false);
+            const [showCatForm, setShowCatForm] = useState(false);
+            const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', brand: '', volume_ml: '', stock_quantity: '', category_id: '', image_url: '' });
+            const [userForm, setUserForm] = useState({ email: '', username: '', password: '', first_name: '', role: 'user' });
+            const [catForm, setCatForm] = useState({ name: '', description: '' });
+            const [message, setMessage] = useState({ type: '', text: '' });
+
+            const isAdmin = user.role === 'admin';
+
+            const loadData = async () => {
+                try {
+                    const [itemsData, catsData] = await Promise.all([api.get('/items?page_size=100'), api.get('/categories')]);
+                    setItems(itemsData.items);
+                    setCategories(catsData);
+                    if (['admin', 'seller'].includes(user.role)) {
+                        const ordersData = await api.get('/orders/seller/orders');
+                        setOrders(ordersData);
+                    }
+                    if (isAdmin) {
+                        const usersData = await api.get('/users');
+                        setUsers(usersData);
+                    }
+                } catch (err) { console.error(err); }
+            };
+
+            useEffect(() => { loadData(); }, []);
+
+            const handleItemSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    const data = {
+                        name: itemForm.name,
+                        description: itemForm.description || null,
+                        price: parseFloat(itemForm.price),
+                        brand: itemForm.brand || null,
+                        volume_ml: itemForm.volume_ml ? parseInt(itemForm.volume_ml) : null,
+                        stock_quantity: parseInt(itemForm.stock_quantity) || 0,
+                        category_id: itemForm.category_id ? parseInt(itemForm.category_id) : null,
+                        image_url: itemForm.image_url || null,
+                    };
+                    if (editingItem) {
+                        await api.put(`/items/${editingItem.id}`, data);
+                        setMessage({ type: 'success', text: 'Товар обновлён!' });
+                    } else {
+                        await api.post('/items', data);
+                        setMessage({ type: 'success', text: 'Товар добавлен!' });
+                    }
+                    setShowItemForm(false);
+                    setEditingItem(null);
+                    setItemForm({ name: '', description: '', price: '', brand: '', volume_ml: '', stock_quantity: '', category_id: '', image_url: '' });
+                    loadData();
+                } catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const handleEditItem = (item) => {
+                setEditingItem(item);
+                setItemForm({
+                    name: item.name, description: item.description || '', price: item.price.toString(),
+                    brand: item.brand || '', volume_ml: item.volume_ml?.toString() || '',
+                    stock_quantity: item.stock_quantity.toString(), category_id: item.category_id?.toString() || '',
+                    image_url: item.image_url || '',
+                });
+                setShowItemForm(true);
+            };
+
+            const handleDeleteItem = async (id) => {
+                if (!confirm('Удалить товар?')) return;
+                try { await api.delete(`/items/${id}`); loadData(); setMessage({ type: 'success', text: 'Удалено!' }); }
+                catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const handleUserSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.post('/users', userForm);
+                    setMessage({ type: 'success', text: 'Пользователь создан!' });
+                    setShowUserForm(false);
+                    setUserForm({ email: '', username: '', password: '', first_name: '', role: 'user' });
+                    loadData();
+                } catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const handleRoleChange = async (userId, newRole) => {
+                try {
+                    await api.put(`/users/${userId}`, { role: newRole });
+                    setMessage({ type: 'success', text: 'Роль обновлена!' });
+                    loadData();
+                } catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const handleCatSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.post('/categories', catForm);
+                    setMessage({ type: 'success', text: 'Категория создана!' });
+                    setShowCatForm(false);
+                    setCatForm({ name: '', description: '' });
+                    loadData();
+                } catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const handleOrderStatus = async (orderId, status) => {
+                try { await api.put(`/orders/${orderId}/status`, { status }); loadData(); }
+                catch (err) { setMessage({ type: 'error', text: err.message }); }
+            };
+
+            const statusOptions = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'];
+            const statusNames = { pending: 'Ожидает', paid: 'Оплачен', shipped: 'Отправлен', delivered: 'Доставлен', cancelled: 'Отменён' };
+            const roleOptions = ['user', 'seller', 'support', 'admin'];
+
+            return (
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    <h1 className="text-3xl font-serif text-white mb-8">Панель управления</h1>
+                    {message.text && <div className={`p-4 rounded-lg mb-6 ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{message.text}</div>}
+
+                    <div className="flex flex-wrap gap-2 mb-8 border-b border-silver/20 pb-4">
+                        {['admin', 'seller'].includes(user.role) && <button onClick={() => setTab('items')} className={`px-4 py-2 rounded-lg transition ${tab === 'items' ? 'btn-silver' : 'text-silver hover:text-white'}`}>Товары</button>}
+                        {['admin', 'seller'].includes(user.role) && <button onClick={() => setTab('categories')} className={`px-4 py-2 rounded-lg transition ${tab === 'categories' ? 'btn-silver' : 'text-silver hover:text-white'}`}>Категории</button>}
+                        {['admin', 'seller'].includes(user.role) && <button onClick={() => setTab('orders')} className={`px-4 py-2 rounded-lg transition ${tab === 'orders' ? 'btn-silver' : 'text-silver hover:text-white'}`}>Заказы</button>}
+                        {isAdmin && <button onClick={() => setTab('users')} className={`px-4 py-2 rounded-lg transition ${tab === 'users' ? 'btn-silver' : 'text-silver hover:text-white'}`}>Пользователи</button>}
+                    </div>
+
+                    {/* Items Tab */}
+                    {tab === 'items' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl text-white">Товары ({items.length})</h2>
+                                <button onClick={() => { setShowItemForm(true); setEditingItem(null); setItemForm({ name: '', description: '', price: '', brand: '', volume_ml: '', stock_quantity: '', category_id: '', image_url: '' }); }} className="btn-silver px-4 py-2 rounded-lg">+ Товар</button>
+                            </div>
+                            {showItemForm && (
+                                <div className="bg-charcoal-light rounded-xl p-6 mb-6 border border-silver/10">
+                                    <h3 className="text-lg text-white mb-4">{editingItem ? 'Редактировать' : 'Новый товар'}</h3>
+                                    <form onSubmit={handleItemSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <input type="text" placeholder="Название *" value={itemForm.name} onChange={(e) => setItemForm({...itemForm, name: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <input type="text" placeholder="Бренд" value={itemForm.brand} onChange={(e) => setItemForm({...itemForm, brand: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" />
+                                        <input type="number" placeholder="Цена (UZS) *" value={itemForm.price} onChange={(e) => setItemForm({...itemForm, price: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <input type="number" placeholder="Объём (мл)" value={itemForm.volume_ml} onChange={(e) => setItemForm({...itemForm, volume_ml: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" />
+                                        <input type="number" placeholder="Кол-во *" value={itemForm.stock_quantity} onChange={(e) => setItemForm({...itemForm, stock_quantity: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <select value={itemForm.category_id} onChange={(e) => setItemForm({...itemForm, category_id: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white">
+                                            <option value="">Без категории</option>
+                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                        {/* Загрузка изображения */}
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="block text-sm text-silver-dark">Изображение</label>
+                                            {itemForm.image_url ? (
+                                                <div className="flex items-center gap-4">
+                                                    <img src={itemForm.image_url} alt="Preview" className="w-20 h-20 object-cover rounded-lg border border-silver/30" />
+                                                    <button type="button" onClick={() => setItemForm({...itemForm, image_url: ''})} className="text-red-400 hover:text-red-300">✕ Удалить</button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col sm:flex-row gap-2">
+                                                    <label className="flex-1 border-2 border-dashed border-silver/30 rounded-lg p-4 text-center cursor-pointer hover:border-silver/50 transition">
+                                                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                                            const file = e.target.files[0];
+                                                            if (!file) return;
+                                                            try {
+                                                                const result = await api.upload('/upload/image', file);
+                                                                setItemForm({...itemForm, image_url: result.url});
+                                                            } catch (err) {
+                                                                alert(err.message);
+                                                            }
+                                                        }} />
+                                                        <span className="text-silver-dark">📷 Загрузить</span>
+                                                    </label>
+                                                    <input type="url" placeholder="или вставьте URL" value={itemForm.image_url} onChange={(e) => setItemForm({...itemForm, image_url: e.target.value})} className="flex-1 bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <textarea placeholder="Описание" value={itemForm.description} onChange={(e) => setItemForm({...itemForm, description: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white md:col-span-2 resize-none" rows="2" />
+                                        <div className="md:col-span-2 flex gap-4">
+                                            <button type="submit" className="btn-silver px-6 py-2 rounded-lg">{editingItem ? 'Сохранить' : 'Создать'}</button>
+                                            <button type="button" onClick={() => setShowItemForm(false)} className="px-6 py-2 rounded-lg border border-silver/30 text-silver">Отмена</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead><tr className="border-b border-silver/20"><th className="text-left py-3 px-4 text-silver-dark">Фото</th><th className="text-left py-3 px-4 text-silver-dark">Название</th><th className="text-left py-3 px-4 text-silver-dark">Цена</th><th className="text-left py-3 px-4 text-silver-dark">Остаток</th><th className="text-left py-3 px-4 text-silver-dark">Действия</th></tr></thead>
+                                    <tbody>
+                                        {items.map(item => (
+                                            <tr key={item.id} className="border-b border-silver/10 hover:bg-charcoal-light/50">
+                                                <td className="py-3 px-4"><div className="w-10 h-10 bg-charcoal rounded flex items-center justify-center">{item.image_url ? <img src={item.image_url} alt="" className="max-h-full max-w-full object-contain" /> : '🧴'}</div></td>
+                                                <td className="py-3 px-4 text-white">{item.name}</td>
+                                                <td className="py-3 px-4 text-silver">{formatPrice(item.price)}</td>
+                                                <td className="py-3 px-4"><span className={item.stock_quantity > 0 ? 'text-green-400' : 'text-red-400'}>{item.stock_quantity}</span></td>
+                                                <td className="py-3 px-4"><button onClick={() => handleEditItem(item)} className="text-blue-400 mr-2">✏️</button><button onClick={() => handleDeleteItem(item.id)} className="text-red-400">🗑️</button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Categories Tab */}
+                    {tab === 'categories' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl text-white">Категории ({categories.length})</h2>
+                                <button onClick={() => setShowCatForm(true)} className="btn-silver px-4 py-2 rounded-lg">+ Категория</button>
+                            </div>
+                            {showCatForm && (
+                                <div className="bg-charcoal-light rounded-xl p-6 mb-6 border border-silver/10">
+                                    <form onSubmit={handleCatSubmit} className="space-y-4">
+                                        <input type="text" placeholder="Название *" value={catForm.name} onChange={(e) => setCatForm({...catForm, name: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <textarea placeholder="Описание" value={catForm.description} onChange={(e) => setCatForm({...catForm, description: e.target.value})} className="w-full bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white resize-none" rows="2" />
+                                        <div className="flex gap-4">
+                                            <button type="submit" className="btn-silver px-6 py-2 rounded-lg">Создать</button>
+                                            <button type="button" onClick={() => setShowCatForm(false)} className="px-6 py-2 rounded-lg border border-silver/30 text-silver">Отмена</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {categories.map(c => <div key={c.id} className="bg-charcoal-light rounded-xl p-6 border border-silver/10"><h3 className="text-white font-medium">{c.name}</h3><p className="text-silver-dark text-sm mt-1">{c.description || 'Без описания'}</p></div>)}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Orders Tab */}
+                    {tab === 'orders' && (
+                        <div>
+                            <h2 className="text-xl text-white mb-6">Заказы ({orders.length})</h2>
+                            {orders.length === 0 ? <div className="text-center py-12 text-silver-dark">Нет заказов</div> : (
+                                <div className="space-y-4">
+                                    {orders.map(order => (
+                                        <div key={order.id} className="bg-charcoal-light rounded-xl p-6 border border-silver/10">
+                                            <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                                                <span className="text-white font-medium">{order.order_number}</span>
+                                                <select value={order.status} onChange={(e) => handleOrderStatus(order.id, e.target.value)} className="bg-charcoal border border-silver/30 rounded px-3 py-1 text-white text-sm">
+                                                    {statusOptions.map(s => <option key={s} value={s}>{statusNames[s]}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="flex justify-between text-silver-dark text-sm">
+                                                <span>{order.shipping_address}</span>
+                                                <span className="text-silver font-semibold">{formatPrice(order.total_price)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Users Tab */}
+                    {tab === 'users' && isAdmin && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl text-white">Пользователи ({users.length})</h2>
+                                <button onClick={() => setShowUserForm(true)} className="btn-silver px-4 py-2 rounded-lg">+ Пользователь</button>
+                            </div>
+                            {showUserForm && (
+                                <div className="bg-charcoal-light rounded-xl p-6 mb-6 border border-silver/10">
+                                    <h3 className="text-lg text-white mb-4">Новый пользователь</h3>
+                                    <form onSubmit={handleUserSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <input type="email" placeholder="Email *" value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <input type="text" placeholder="Логин *" value={userForm.username} onChange={(e) => setUserForm({...userForm, username: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <input type="password" placeholder="Пароль *" value={userForm.password} onChange={(e) => setUserForm({...userForm, password: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" required />
+                                        <input type="text" placeholder="Имя" value={userForm.first_name} onChange={(e) => setUserForm({...userForm, first_name: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white" />
+                                        <select value={userForm.role} onChange={(e) => setUserForm({...userForm, role: e.target.value})} className="bg-charcoal border border-silver/30 rounded-lg px-4 py-2 text-white">
+                                            {roleOptions.map(r => <option key={r} value={r}>{roleConfig[r].prefix}</option>)}
+                                        </select>
+                                        <div className="md:col-span-2 flex gap-4">
+                                            <button type="submit" className="btn-silver px-6 py-2 rounded-lg">Создать</button>
+                                            <button type="button" onClick={() => setShowUserForm(false)} className="px-6 py-2 rounded-lg border border-silver/30 text-silver">Отмена</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead><tr className="border-b border-silver/20"><th className="text-left py-3 px-4 text-silver-dark">ID</th><th className="text-left py-3 px-4 text-silver-dark">Логин</th><th className="text-left py-3 px-4 text-silver-dark">Email</th><th className="text-left py-3 px-4 text-silver-dark">Роль</th><th className="text-left py-3 px-4 text-silver-dark">Статус</th></tr></thead>
+                                    <tbody>
+                                        {users.map(u => (
+                                            <tr key={u.id} className="border-b border-silver/10 hover:bg-charcoal-light/50">
+                                                <td className="py-3 px-4 text-silver-dark">{u.id}</td>
+                                                <td className="py-3 px-4 text-white">{u.username}</td>
+                                                <td className="py-3 px-4 text-silver-dark">{u.email}</td>
+                                                <td className="py-3 px-4">
+                                                    <select value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value)} disabled={u.id === user.id} className="bg-charcoal border border-silver/30 rounded px-2 py-1 text-white text-sm disabled:opacity-50">
+                                                        {roleOptions.map(r => <option key={r} value={r}>{roleConfig[r].prefix}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td className="py-3 px-4"><span className={u.is_active ? 'text-green-400' : 'text-red-400'}>{u.is_active ? 'Активен' : 'Заблокирован'}</span></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Main App
+        function App() {
+            const [user, setUser] = useState(null);
+            const [page, setPage] = useState('catalog');
+            const [cart, setCart] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            const loadUser = async () => {
+                const token = localStorage.getItem('token');
+                if (!token) { setLoading(false); return; }
+                try {
+                    const userData = await api.get('/auth/me');
+                    setUser(userData);
+                } catch (err) { localStorage.removeItem('token'); }
+                finally { setLoading(false); }
+            };
+
+            const loadCart = async () => {
+                if (!user) return;
+                try { const data = await api.get('/cart'); setCart(data.items); }
+                catch (err) { console.error(err); }
+            };
+
+            useEffect(() => { loadUser(); }, []);
+            useEffect(() => { if (user) loadCart(); }, [user]);
+
+            const handleLogin = (userData) => {
+                setUser(userData);
+                if (['admin', 'seller', 'support'].includes(userData.role)) setPage('admin');
+                else setPage('catalog');
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('token');
+                setUser(null);
+                setCart([]);
+                setPage('catalog');
+            };
+
+            const handleAddToCart = async (itemId) => {
+                if (!user) { setPage('login'); return; }
+                try { await api.post('/cart', { item_id: itemId, quantity: 1 }); loadCart(); }
+                catch (err) { alert(err.message); }
+            };
+
+            const handleUpdateCart = async (cartItemId, quantity) => {
+                try { await api.put(`/cart/${cartItemId}`, { quantity }); loadCart(); }
+                catch (err) { alert(err.message); }
+            };
+
+            const handleRemoveFromCart = async (cartItemId) => {
+                try { await api.delete(`/cart/${cartItemId}`); loadCart(); }
+                catch (err) { alert(err.message); }
+            };
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-silver border-t-transparent rounded-full animate-spin"></div></div>;
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <Header user={user} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} onNavigate={setPage} onLogout={handleLogout} />
+                    <main className="flex-grow">
+                        <div className="max-w-7xl mx-auto px-4 py-8">
+                            {page === 'login' && <AuthPage onLogin={handleLogin} />}
+                            {page === 'catalog' && <CatalogPage user={user} onAddToCart={handleAddToCart} />}
+                            {page === 'cart' && <CartPage cart={cart} onUpdateCart={handleUpdateCart} onRemoveFromCart={handleRemoveFromCart} onNavigate={setPage} onClearCart={() => setCart([])} />}
+                            {page === 'orders' && <OrdersPage />}
+                            {page === 'support' && user && <SupportPage user={user} />}
+                            {page === 'admin' && user && ['admin', 'seller', 'support'].includes(user.role) && <AdminPage user={user} />}
+                        </div>
+                    </main>
+                <footer className="bg-charcoal-light border-t border-silver/10 py-8 mt-auto">
+                    <div className="max-w-7xl mx-auto px-4 text-center">
+                        <img src="/static/logo.png" alt="BV Parfume" className="h-10 mx-auto mb-4 opacity-70" />
+                        <p className="text-silver-dark text-sm">© 2026 BV Parfume • Оплата при получении • Доставка по Узбекистану</p>
+                    </div>
+                </footer>
+            </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

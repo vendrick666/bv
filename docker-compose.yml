@@ -1,0 +1,68 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/bv_parfume.db
+      - SECRET_KEY=super-secret-key-change-me
+      - DEBUG=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=parfume-images
+      - MINIO_SECURE=false
+    volumes:
+      - db_data:/app/data
+      - uploads_data:/app/uploads
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing myminio/parfume-images;
+      mc anonymous set public myminio/parfume-images;
+      exit 0;
+      "
+
+  test:
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "true"
+    depends_on:
+      - app
+    command: ["pytest", "-q"]
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/bv_parfume.db
+    volumes:
+      - db_data:/app/data
+
+volumes:
+  db_data:
+  minio_data:
+  uploads_data:
