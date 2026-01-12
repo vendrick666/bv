@@ -182,9 +182,7 @@ async def get_dashboard(
     # Подсчёт товаров
     total_items = (await session.execute(select(func.count(Item.id)))).scalar()
     active_items = (
-        await session.execute(
-            select(func.count(Item.id)).where(Item.is_active.is_(True))
-        )
+        await session.execute(select(func.count(Item.id)).where(Item.is_active.is_(True)))
     ).scalar()
 
     # Подсчёт заказов
@@ -201,9 +199,7 @@ async def get_dashboard(
     # Общая выручка
     total_revenue_result = await session.execute(
         select(func.sum(Order.total_price)).where(
-            Order.status.in_(
-                [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED]
-            )
+            Order.status.in_([OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED])
         )
     )
     total_revenue = total_revenue_result.scalar() or Decimal("0")
@@ -309,9 +305,7 @@ async def get_user(
     return user
 
 
-@router.post(
-    "/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: AdminUserCreate,
     current_user: User = Depends(get_current_admin_user),
@@ -320,9 +314,7 @@ async def create_user(
     """Создать пользователя"""
     # Проверка уникальности
     existing = await session.execute(
-        select(User).where(
-            (User.email == data.email) | (User.username == data.username)
-        )
+        select(User).where((User.email == data.email) | (User.username == data.username))
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email или username уже занят")
@@ -438,9 +430,7 @@ async def get_item(
     return item
 
 
-@router.post(
-    "/items", response_model=AdminItemResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/items", response_model=AdminItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_item(
     data: AdminItemCreate,
     current_user: User = Depends(get_current_admin_user),
@@ -535,9 +525,7 @@ async def get_category(
 
     # Подсчёт товаров
     items_count = (
-        await session.execute(
-            select(func.count(Item.id)).where(Item.category_id == category_id)
-        )
+        await session.execute(select(func.count(Item.id)).where(Item.category_id == category_id))
     ).scalar()
     category.items_count = items_count or 0
 
@@ -587,9 +575,7 @@ async def update_category(
     await session.refresh(category)
 
     items_count = (
-        await session.execute(
-            select(func.count(Item.id)).where(Item.category_id == category_id)
-        )
+        await session.execute(select(func.count(Item.id)).where(Item.category_id == category_id))
     ).scalar()
     category.items_count = items_count or 0
 
@@ -611,9 +597,7 @@ async def delete_category(
     # Обнуляем category_id у товаров
     await session.execute(select(Item).where(Item.category_id == category_id))
     items = (
-        (await session.execute(select(Item).where(Item.category_id == category_id)))
-        .scalars()
-        .all()
+        (await session.execute(select(Item).where(Item.category_id == category_id))).scalars().all()
     )
     for item in items:
         item.category_id = None

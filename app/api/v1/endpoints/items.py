@@ -73,9 +73,7 @@ async def get_items(
 
     # Сортировка
     sort_column = getattr(Item, sort_by)
-    query = query.order_by(
-        sort_column.desc() if sort_order == "desc" else sort_column.asc()
-    )
+    query = query.order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc())
 
     # Пагинация
     offset = (page - 1) * page_size
@@ -99,9 +97,7 @@ async def get_item(
     session: AsyncSession = Depends(get_async_session),
 ):
     """Получение товара по ID (Занятие 10)"""
-    result = await session.execute(
-        select(Item).where(Item.id == item_id, Item.is_active.is_(True))
-    )
+    result = await session.execute(select(Item).where(Item.id == item_id, Item.is_active.is_(True)))
     item = result.scalar_one_or_none()
 
     if not item:

@@ -19,7 +19,4 @@ class TestAuthValidation:
         assert "details" in data["error"] and "errors" in data["error"]["details"]
         # At least one of the error messages should mention password
         msgs = [e["message"].lower() for e in data["error"]["details"]["errors"]]
-        assert any(
-            "password" in m or "парол" in m or "заглав" in m or "цифр" in m
-            for m in msgs
-        )
+        assert any("password" in m or "парол" in m or "заглав" in m or "цифр" in m for m in msgs)

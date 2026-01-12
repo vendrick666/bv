@@ -38,12 +38,8 @@ class CartItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     quantity = Column(Integer, default=1)
 
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    item_id = Column(
-        Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
 
     added_at = Column(DateTime, default=datetime.utcnow)
 
@@ -83,9 +79,7 @@ class OrderItem(Base):
     quantity = Column(Integer, nullable=False)
     price_at_purchase = Column(Numeric(10, 2), nullable=False)
 
-    order_id = Column(
-        Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
-    )
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     item_id = Column(Integer, ForeignKey("items.id"), nullable=False)
 
     order = relationship("Order", back_populates="items")

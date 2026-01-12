@@ -30,9 +30,7 @@ class TestCategoriesAPI:
 
     @pytest.mark.asyncio
     async def test_create_duplicate_fails(self, client, admin_headers):
-        await client.post(
-            "/api/v1/categories", json={"name": "DupCat"}, headers=admin_headers
-        )
+        await client.post("/api/v1/categories", json={"name": "DupCat"}, headers=admin_headers)
         resp = await client.post(
             "/api/v1/categories", json={"name": "DupCat"}, headers=admin_headers
         )

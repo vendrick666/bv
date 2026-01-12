@@ -97,9 +97,7 @@ async def validation_exception_handler(
     try:
         payload = await request.json()
         if isinstance(payload, dict):
-            sanitized = {
-                k: ("***" if k.lower() == "password" else v) for k, v in payload.items()
-            }
+            sanitized = {k: ("***" if k.lower() == "password" else v) for k, v in payload.items()}
         else:
             sanitized = str(payload)
     except Exception:
@@ -108,7 +106,8 @@ async def validation_exception_handler(
     import logging
 
     logging.warning(
-        f"Validation error on {request.method} {request.url.path}: errors={errors} payload={sanitized}"
+        f"Validation error on {request.method} {request.url.path}: "
+        f"errors={errors} payload={sanitized}"
     )
 
     return JSONResponse(

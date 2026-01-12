@@ -20,9 +20,7 @@ from app.schemas.user import UserCreate, UserResponse, Token, LoginRequest
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
     session: AsyncSession = Depends(get_async_session),
@@ -35,9 +33,7 @@ async def register(
         raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
 
     # Проверка username
-    result = await session.execute(
-        select(User).where(User.username == user_data.username)
-    )
+    result = await session.execute(select(User).where(User.username == user_data.username))
     existing_user = result.scalar_one_or_none()
     if existing_user:
         # Маскируем email: показываем первые 2 символа и домен
@@ -46,9 +42,7 @@ async def register(
         if at_pos > 2:
             masked_email = email[:2] + "*" * (at_pos - 2) + email[at_pos:]
         else:
-            masked_email = (
-                email[0] + "*" * (at_pos - 1) + email[at_pos:] if at_pos > 0 else email
-            )
+            masked_email = email[0] + "*" * (at_pos - 1) + email[at_pos:] if at_pos > 0 else email
         raise HTTPException(
             status_code=400,
             detail=f"Логин '{user_data.username}' уже занят пользователем с почтой: {masked_email}",
@@ -67,13 +61,14 @@ async def register(
                 masked_email = email[:2] + "*" * (at_pos - 2) + email[at_pos:]
             else:
                 masked_email = (
-                    email[0] + "*" * (at_pos - 1) + email[at_pos:]
-                    if at_pos > 0
-                    else email
+                    email[0] + "*" * (at_pos - 1) + email[at_pos:] if at_pos > 0 else email
                 )
             raise HTTPException(
                 status_code=400,
-                detail=f"Этот пароль уже используется пользователем: {masked_email}. Придумайте другой пароль.",
+                detail=(
+                    f"Этот пароль уже используется пользователем: {masked_email}. "
+                    "Придумайте другой пароль."
+                ),
             )
 
     # Создание пользователя
@@ -113,9 +108,7 @@ async def login(
         result = await session.execute(select(User).where(User.email == login_value))
         user = result.scalar_one_or_none()
 
-    if not user or not await verify_password_async(
-        credentials.password, user.password_hash
-    ):
+    if not user or not await verify_password_async(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Неверный логин/email или пароль")
 
     if not user.is_active:

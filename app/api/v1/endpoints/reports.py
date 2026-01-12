@@ -28,15 +28,11 @@ async def users_report(
 
     total = (await session.execute(select(func.count(User.id)))).scalar()
     new = (
-        await session.execute(
-            select(func.count(User.id)).where(User.created_at >= since)
-        )
+        await session.execute(select(func.count(User.id)).where(User.created_at >= since))
     ).scalar()
     active = (
         await session.execute(
-            select(func.count(func.distinct(Order.user_id))).where(
-                Order.created_at >= since
-            )
+            select(func.count(func.distinct(Order.user_id))).where(Order.created_at >= since)
         )
     ).scalar()
 
@@ -58,16 +54,12 @@ async def items_report(
     since = datetime.utcnow() - timedelta(days=days)
 
     total = (
-        await session.execute(
-            select(func.count(Item.id)).where(Item.is_active.is_(True))
-        )
+        await session.execute(select(func.count(Item.id)).where(Item.is_active.is_(True)))
     ).scalar()
 
     out_of_stock = (
         await session.execute(
-            select(func.count(Item.id)).where(
-                Item.is_active.is_(True), Item.stock_quantity == 0
-            )
+            select(func.count(Item.id)).where(Item.is_active.is_(True), Item.stock_quantity == 0)
         )
     ).scalar()
 
@@ -85,9 +77,7 @@ async def items_report(
     return {
         "total_items": total,
         "out_of_stock": out_of_stock,
-        "top_selling": [
-            {"id": r.id, "name": r.name, "sold": r.sold} for r in top_result.all()
-        ],
+        "top_selling": [{"id": r.id, "name": r.name, "sold": r.sold} for r in top_result.all()],
         "period_days": days,
     }
 
@@ -105,6 +95,4 @@ async def categories_report(
         .order_by(func.count(Item.id).desc())
     )
 
-    return [
-        {"id": r.id, "name": r.name, "items_count": r.items_count} for r in result.all()
-    ]
+    return [{"id": r.id, "name": r.name, "items_count": r.items_count} for r in result.all()]

@@ -25,7 +25,8 @@ class TestAuth:
         response = await client.post(
             "/api/v1/auth/login",
             json={
-                "login": "test@test.com",  # Changed from "email" to "login" to match LoginRequest schema
+                # Changed from "email" to "login" to match LoginRequest schema
+                "login": "test@test.com",
                 "password": "Test1234",
             },
         )
@@ -37,7 +38,8 @@ class TestAuth:
         response = await client.post(
             "/api/v1/auth/login",
             json={
-                "login": "test@test.com",  # Changed from "email" to "login" to match LoginRequest schema
+                # Changed from "email" to "login" to match LoginRequest schema
+                "login": "test@test.com",
                 "password": "Wrong123",
             },
         )
@@ -66,7 +68,8 @@ class TestItems:
                 "price": "100.00",
             },
         )
-        # Should return 401 (Unauthorized) when no token provided, or 403 (Forbidden) when token is provided but insufficient permissions
+        # Should return 401 (Unauthorized) when no token provided,
+        # or 403 (Forbidden) when token is provided but insufficient permissions
         assert response.status_code in [401, 403]
 
     @pytest.mark.asyncio

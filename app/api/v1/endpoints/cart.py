@@ -91,9 +91,7 @@ async def add_to_cart(
 
     # Загружаем с item
     result = await session.execute(
-        select(CartItem)
-        .where(CartItem.id == cart_item.id)
-        .options(joinedload(CartItem.item))
+        select(CartItem).where(CartItem.id == cart_item.id).options(joinedload(CartItem.item))
     )
     return result.scalar_one()
 

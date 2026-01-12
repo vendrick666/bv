@@ -48,9 +48,7 @@ async def get_orders(
 ):
     """История заказов пользователя (Занятие 16)"""
     result = await session.execute(
-        select(Order)
-        .where(Order.user_id == current_user.id)
-        .order_by(Order.created_at.desc())
+        select(Order).where(Order.user_id == current_user.id).order_by(Order.created_at.desc())
     )
     return result.scalars().all()
 
@@ -100,9 +98,7 @@ async def create_order(
     # Проверяем наличие
     for ci in cart_items:
         if ci.item.stock_quantity < ci.quantity:
-            raise HTTPException(
-                status_code=400, detail=f"Недостаточно товара: {ci.item.name}"
-            )
+            raise HTTPException(status_code=400, detail=f"Недостаточно товара: {ci.item.name}")
 
     # Считаем сумму
     total = sum(ci.item.price * ci.quantity for ci in cart_items)
@@ -196,10 +192,7 @@ async def get_seller_orders(
     """Заказы с товарами продавца (Занятие 17)"""
     # Подзапрос: заказы с товарами этого продавца
     subquery = (
-        select(OrderItem.order_id)
-        .join(Item)
-        .where(Item.owner_id == current_user.id)
-        .distinct()
+        select(OrderItem.order_id).join(Item).where(Item.owner_id == current_user.id).distinct()
     )
 
     query = select(Order).where(Order.id.in_(subquery))

@@ -76,9 +76,7 @@ async def get_tickets(
     return response
 
 
-@router.post(
-    "/tickets", response_model=TicketResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/tickets", response_model=TicketResponse, status_code=status.HTTP_201_CREATED)
 async def create_ticket(
     data: TicketCreate,
     current_user: User = Depends(get_current_user),
@@ -177,9 +175,7 @@ async def add_message(
     session: AsyncSession = Depends(get_async_session),
 ):
     """Добавление сообщения в тикет"""
-    result = await session.execute(
-        select(SupportTicket).where(SupportTicket.id == ticket_id)
-    )
+    result = await session.execute(select(SupportTicket).where(SupportTicket.id == ticket_id))
     ticket = result.scalar_one_or_none()
 
     if not ticket:
@@ -268,24 +264,18 @@ async def assign_ticket(
     if not is_staff(current_user):
         raise HTTPException(status_code=403, detail="Нет прав")
 
-    result = await session.execute(
-        select(SupportTicket).where(SupportTicket.id == ticket_id)
-    )
+    result = await session.execute(select(SupportTicket).where(SupportTicket.id == ticket_id))
     ticket = result.scalar_one_or_none()
 
     if not ticket:
         raise HTTPException(status_code=404, detail="Тикет не найден")
 
     # Проверяем, что назначаемый пользователь - саппорт или админ
-    assignee_result = await session.execute(
-        select(User).where(User.id == data.assigned_to)
-    )
+    assignee_result = await session.execute(select(User).where(User.id == data.assigned_to))
     assignee = assignee_result.scalar_one_or_none()
 
     if not assignee or assignee.role not in [UserRole.SUPPORT, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=400, detail="Можно назначить только на саппорта или админа"
-        )
+        raise HTTPException(status_code=400, detail="Можно назначить только на саппорта или админа")
 
     ticket.assigned_to = data.assigned_to
     if ticket.status == TicketStatus.OPEN:
