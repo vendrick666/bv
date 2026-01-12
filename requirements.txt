@@ -3,9 +3,10 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-multipart>=0.0.9
 
-# Database (SQLite)
+# Database
 sqlalchemy>=2.0.36
-aiosqlite>=0.20.0
+aiosqlite>=0.20.0  # SQLite driver
+asyncpg>=0.29.0  # PostgreSQL driver (for CI/CD and production)
 alembic>=1.14.0
 
 # Settings
