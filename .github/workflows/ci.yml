@@ -54,6 +54,19 @@ jobs:
             echo "No pytest.log found"
           fi
           echo "===== PYTEST LOG END ====="
+
+      - name: Save pytest short summary to job summary
+        if: always()
+        run: |
+          echo "## Pytest short summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f pytest.log ]; then
+            echo "\n\n---\n" >> "$GITHUB_STEP_SUMMARY"
+            # Extract failures, errors or tracebacks with some context
+            grep -n -E "FAILED|ERROR|Traceback" pytest.log -n -C 3 | sed -n '1,200p' >> "$GITHUB_STEP_SUMMARY" || true
+          else
+            echo "No pytest.log found" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload pytest logs
         if: always()
         uses: actions/upload-artifact@v4
