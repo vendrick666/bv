@@ -29,6 +29,7 @@ TEST_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 def event_loop():
     """Create an event loop for the test session."""
     import asyncio
+
     policy = asyncio.get_event_loop_policy()
     loop = policy.new_event_loop()
     yield loop
@@ -45,17 +46,17 @@ async def test_engine(event_loop) -> AsyncGenerator[AsyncEngine, None]:
         pool_pre_ping=True,
         pool_recycle=3600,
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     # Drop all tables and close engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    
+
     await engine.dispose()
 
 
@@ -65,13 +66,13 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
     connection = await test_engine.connect()
     # Start a transaction that we'll roll back after the test
     transaction = await connection.begin()
-    
+
     session_maker = async_sessionmaker(
         bind=connection,
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     try:
         async with session_maker() as session:
             yield session
