@@ -105,10 +105,14 @@ async def init_db():
                      category_id=cat2.id, owner_id=seller.id, stock_quantity=50,
                      description="Страстный аромат с мятой и ванилью.",
                      image_url="https://images.unsplash.com/photo-1587017539504-67cfbddac569?w=400"),
-                Item(name="Lancôme La Vie Est Belle", brand="Lancôme", price=1050000, volume_ml=75,
-                     category_id=cat1.id, owner_id=seller.id, stock_quantity=50,
-                     description="Сладкий ирисово-пралиновый аромат.",
-                     image_url="https://images.unsplash.com/photo-1595425959155-f1f7da191ef2?w=400")
+                Item(name="Yves Saint Laurent Libre", brand="Yves Saint Laurent", price=1350000, volume_ml=90, 
+                     category_id=cat1.id, owner_id=seller.id, stock_quantity=50, 
+                     description="Цветочный аромат с нотами лаванды и апельсинового цвета.", 
+                     image_url="https://images.unsplash.com/photo-1590736969955-71cc94801759?w=400"),
+                Item(name="Giorgio Armani Acqua di Gio", brand="Giorgio Armani", price=1050000, volume_ml=100, 
+                     category_id=cat2.id, owner_id=seller.id, stock_quantity=50, 
+                     description="Свежий морской аромат с нотами жасмина и кедра.", 
+                     image_url="https://images.unsplash.com/photo-1594035910387-fea47794261f?w=400"),
             ]
             session.add_all(items)
             
