@@ -1,15 +1,13 @@
 """
-Pytest fixtures
+Pytest fixtures for pytest-asyncio 0.24+
 """
 
 import os
 from typing import AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -23,37 +21,28 @@ from app.models.user import User, UserRole
 TEST_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
 
-# This fixture is required for session-scoped async fixtures to work properly
-# It must be a regular pytest fixture, not pytest_asyncio fixture
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the test session."""
-    import asyncio
-
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
-async def test_engine(event_loop) -> AsyncGenerator[AsyncEngine, None]:
-    """Create test database engine and tables once per test session."""
-    # Use pool_pre_ping to handle connection issues
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Create a fresh database session for each test."""
     engine = create_async_engine(
         TEST_DATABASE_URL,
         echo=False,
-        pool_pre_ping=True,
-        pool_recycle=3600,
     )
 
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    yield engine
+    session_maker = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
 
-    # Drop all tables and close engine
+    async with session_maker() as session:
+        yield session
+
+    # Drop all tables after test
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
@@ -61,29 +50,9 @@ async def test_engine(event_loop) -> AsyncGenerator[AsyncEngine, None]:
 
 
 @pytest_asyncio.fixture
-async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """Create a database session for each test with transaction rollback."""
-    connection = await test_engine.connect()
-    # Start a transaction that we'll roll back after the test
-    transaction = await connection.begin()
-
-    session_maker = async_sessionmaker(
-        bind=connection,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    try:
-        async with session_maker() as session:
-            yield session
-    finally:
-        # Always rollback the transaction to clean up test data
-        await transaction.rollback()
-        await connection.close()
-
-
-@pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """Create test client with overridden database session."""
+
     async def override_session():
         yield db_session
 
@@ -97,6 +66,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 @pytest_asyncio.fixture
 async def test_user(db_session: AsyncSession) -> User:
+    """Create a regular test user."""
     user = User(
         email="test@test.com",
         username="testuser",
@@ -111,6 +81,7 @@ async def test_user(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def test_seller(db_session: AsyncSession) -> User:
+    """Create a seller test user."""
     user = User(
         email="seller@test.com",
         username="testseller",
@@ -125,6 +96,7 @@ async def test_seller(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def test_admin(db_session: AsyncSession) -> User:
+    """Create an admin test user."""
     user = User(
         email="admin@test.com",
         username="testadmin",
@@ -139,17 +111,20 @@ async def test_admin(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def auth_headers(test_user: User) -> dict:
+    """Get auth headers for regular user."""
     token = create_access_token({"sub": str(test_user.id)})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture
 async def seller_headers(test_seller: User) -> dict:
+    """Get auth headers for seller."""
     token = create_access_token({"sub": str(test_seller.id)})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture
 async def admin_headers(test_admin: User) -> dict:
+    """Get auth headers for admin."""
     token = create_access_token({"sub": str(test_admin.id)})
     return {"Authorization": f"Bearer {token}"}
