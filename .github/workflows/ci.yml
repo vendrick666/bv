@@ -38,10 +38,19 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
-      - run: pytest --cov=app --cov-fail-under=60
+      - run: |
+          set -o pipefail
+          pytest -vv --maxfail=1 --junitxml=pytest-junit.xml --log-cli-level=INFO --showlocals --cov=app --cov-fail-under=60 2>&1 | tee pytest.log
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_db
           SECRET_KEY: test-secret
+      - name: Upload pytest logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: |
+            pytest-junit.xml
+            pytest.log
 
   build:
     runs-on: ubuntu-latest
