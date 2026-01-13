@@ -19,9 +19,7 @@ from app.models.user import User, UserRole
 TEST_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-test_session_maker = async_sessionmaker(
-    test_engine, class_=AsyncSession, expire_on_commit=False
-)
+test_session_maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 @pytest.fixture(scope="session")
@@ -51,9 +49,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_async_session] = override_session
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
     app.dependency_overrides.clear()
