@@ -100,7 +100,9 @@ async def test_login_with_username():
                 # Assertions
                 assert result.access_token == "mock_access_token"
                 assert result.refresh_token == "mock_refresh_token"
-                assert result.user == mock_user
+                assert result.user.id == mock_user.id
+                assert result.user.email == mock_user.email
+                assert result.user.username == mock_user.username
 
 
 @pytest.mark.asyncio
